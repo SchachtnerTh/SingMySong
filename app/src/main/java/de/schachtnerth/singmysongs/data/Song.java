@@ -13,4 +13,12 @@ public class Song {
     public String text;
 
     public boolean isPrivate;
+
+    public Song() {}
+
+    public Song(String title, String lyrics) {
+        this.title = title;
+        this.text = lyrics;
+        this.isPrivate = true;
+    }
 }

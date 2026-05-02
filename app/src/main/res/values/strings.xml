@@ -1,3 +1,11 @@
 <resources>
     <string name="app_name">SingMySongs</string>
+    <string name="import_str">Import</string>
+    <string name="type_str">text/*</string>
+    <string name="song_exists">Lied \'%1$s\' bereits vorhanden.</string>
+    <string name="text_search">Suche</string>
+    <plurals name="import_success">
+        <item quantity="one">Import erfolgreich. %1$d Lied importiert</item>
+        <item quantity="other">Import erfolgreich. %1$d Lieder importiert</item>
+    </plurals>
 </resources>

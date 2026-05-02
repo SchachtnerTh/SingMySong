@@ -6,17 +6,25 @@ import androidx.room.Room;
 
 public class DatabaseClient {
 
-    private static AppDatabase instance;
+    private static DatabaseClient instance;
+    private AppDatabase appDatabase;
 
-    public static AppDatabase getInstance(Context context) {
+    private DatabaseClient(Context context) {
+        appDatabase = Room.databaseBuilder(context,
+                        AppDatabase.class,
+                "songs_db")
+                .allowMainThreadQueries() // nur für Test (TODO)
+                .build();
+    }
+
+    public static synchronized DatabaseClient getInstance(Context context) {
         if (instance == null) {
-            instance = Room.databaseBuilder(
-                            context.getApplicationContext(),
-                            AppDatabase.class,
-                            "songs_db"
-                    ).allowMainThreadQueries() // nur für Entwicklung!
-                    .build();
+            instance = new DatabaseClient(context);
         }
         return instance;
+    }
+
+    public AppDatabase getAppDatabase() {
+        return appDatabase;
     }
 }

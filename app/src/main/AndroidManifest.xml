@@ -24,6 +24,8 @@
             </intent-filter>
         </activity>
         <activity android:name=".SongActivity" />
+        <activity android:name=".EditSongActivity" />
+        <activity android:name=".AddSongActivity" />
     </application>
 
 </manifest>

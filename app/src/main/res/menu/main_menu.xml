@@ -1,0 +1,23 @@
+<menu xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+    <item
+        android:id="@+id/action_search"
+        android:title="@string/text_search"
+        android:icon="@android:drawable/ic_menu_search"
+        app:showAsAction="always|collapseActionView"
+        app:actionViewClass="androidx.appcompat.widget.SearchView"/>
+    <item
+        android:id="@+id/action_add"
+        android:title="Hinzufügen"
+        android:icon="@android:drawable/ic_input_add"
+        app:showAsAction="always"/>
+    <item
+        android:id="@+id/action_import"
+        android:title="@string/import_str"
+        app:showAsAction="never" />
+    <item
+        android:id="@+id/action_export"
+        android:title="Export"
+        android:icon="@android:drawable/ic_menu_save"
+        app:showAsAction="never"/>
+</menu>
