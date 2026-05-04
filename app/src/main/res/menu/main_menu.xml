@@ -1,6 +1,14 @@
 <menu xmlns:android="http://schemas.android.com/apk/res/android"
     xmlns:app="http://schemas.android.com/apk/res-auto">
     <item
+        android:id="@+id/create_group"
+        app:showAsAction="never"
+        android:title="Gruppe erstellen"/>
+    <item
+        android:id="@+id/show_group"
+        app:showAsAction="never"
+        android:title="QR-Code anzeigen"/>
+    <item
         android:id="@+id/action_search"
         android:title="@string/text_search"
         android:icon="@android:drawable/ic_menu_search"

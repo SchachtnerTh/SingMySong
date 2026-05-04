@@ -2,11 +2,19 @@ package de.schachtnerth.singmysongs;
 
 import android.annotation.SuppressLint;
 import android.app.AlertDialog;
+import android.content.ClipData;
+import android.content.ClipboardManager;
 import android.content.Intent;
+import android.content.SharedPreferences;
 import android.net.Uri;
 import android.os.Bundle;
+import android.os.Environment;
+import android.os.Handler;
+import android.os.Looper;
+import android.util.Log;
 import android.view.Menu;
 import android.view.MenuItem;
+import android.view.View;
 import android.widget.ListView;
 import androidx.appcompat.widget.SearchView;
 import android.widget.Toast;
@@ -17,19 +25,230 @@ import androidx.appcompat.app.AppCompatActivity;
 import androidx.recyclerview.widget.LinearLayoutManager;
 import androidx.recyclerview.widget.RecyclerView;
 
+import org.json.JSONException;
+import org.json.JSONObject;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileWriter;
 import java.io.InputStream;
 import java.io.InputStreamReader;
-import java.util.ArrayList;
+import java.net.URI;
 import java.util.List;
+import org.java_websocket.client.WebSocketClient;
+import org.java_websocket.handshake.ServerHandshake;
 
 import de.schachtnerth.singmysongs.data.AppDatabase;
 import de.schachtnerth.singmysongs.data.DatabaseClient;
 import de.schachtnerth.singmysongs.data.Song;
 
+import com.google.zxing.BarcodeFormat;
+import com.journeyapps.barcodescanner.BarcodeEncoder;
+import android.graphics.Bitmap;
+import android.widget.ImageView;
+
 public class MainActivity extends AppCompatActivity {
+
+    private WebSocketClient client;
+    private String currentGroupId;
+
+    SharedPreferences prefs;
+
+    private final Handler pingHandler = new Handler(Looper.getMainLooper());
+    private Runnable pingRunnable;
+
+    private void startPing(String groupId, WebSocketClient webSocket) {
+
+        pingRunnable = new Runnable() {
+            @Override
+            public void run() {
+                try {
+                    JSONObject msg = new JSONObject();
+                    msg.put("type", "ping");
+                    msg.put("groupId", groupId);
+
+                    webSocket.send(msg.toString());
+
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+
+                pingHandler.postDelayed(this, 60 * 1000); // jede 60 Sekunden
+            }
+        };
+
+        pingHandler.post(pingRunnable);
+    }
+
+    private void stopPing() {
+        if (pingHandler != null && pingRunnable != null) {
+            pingHandler.removeCallbacks(pingRunnable);
+        }
+    }
+
+    private void connectToServer() {
+        try {
+            //URI uri = new URI("ws://rootserver.eltheim.de:8087");
+            URI uri = new URI("ws://46.38.254.173:8087"); // TODO: IP-Adresse durch Hostnamen ersetzen
+
+            client = new WebSocketClient(uri) {
+
+                @Override
+                public void onOpen(ServerHandshake handshakedata) {
+                    runOnUiThread(() ->
+                            Toast.makeText(MainActivity.this, "Verbunden!", Toast.LENGTH_SHORT).show()
+                    );
+
+
+                }
+
+                @Override
+                public void onMessage(String message) {
+                    runOnUiThread(() -> {
+                        Log.d("WS", message);
+                        handleServerMessage(message);
+                    });
+                }
+
+                @Override
+                public void onClose(int code, String reason, boolean remote) {
+                    Log.d("WS", "CLOSED: " + reason);
+                }
+
+                @Override
+                public void onError(Exception ex) {
+                    ex.printStackTrace();
+                }
+            };
+
+            Log.d("WS", "before connect");
+            client.connect();
+            Log.d("WS", "after connect");
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+//    private void showGroupDialog(String groupId) {
+//        new AlertDialog.Builder(this)
+//                .setTitle("Gruppe erstellt")
+//                .setMessage("Dein Gruppen-Code:\n\n" + groupId)
+//                .setPositiveButton("OK", null)
+//                .show();
+//    }
+
+    private void showGroupDialog(String groupId) {
+        AlertDialog.Builder builder = new AlertDialog.Builder(this);
+        View view = getLayoutInflater().inflate(R.layout.dialog_group, null);
+        ImageView qrImage = view.findViewById(R.id.qrImage);
+
+        try {
+            BarcodeEncoder barcodeEncoder = new BarcodeEncoder();
+            Bitmap bitmap = barcodeEncoder.encodeBitmap(
+                    groupId,
+                    BarcodeFormat.QR_CODE,
+                    400,
+                    400
+            );
+            qrImage.setImageBitmap(bitmap);
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+
+        builder.setView(view);
+        builder.setPositiveButton("OK", null);
+        builder.show();
+    }
+
+    private void handleServerMessage(String message) {
+        try {
+            JSONObject obj = new JSONObject(message);
+            String type = obj.getString("type");
+
+            switch (type) {
+
+                case "group_created":
+                    String groupId = obj.getString("groupId");
+
+                    currentGroupId = groupId;
+                    SharedPreferences.Editor editor = prefs.edit();
+                    editor.putString("groupId", currentGroupId);
+                    editor.apply();
+
+                    // Optionsmenü anpassen, dass die Session nicht zweimal erzeugt werden kann
+                    invalidateOptionsMenu();
+
+                    // keepalive Ping starten
+                    startPing(currentGroupId, client);
+
+                    runOnUiThread(() ->
+                            showGroupDialog(currentGroupId)
+                    );
+                    break;
+
+                case "joined":
+                    runOnUiThread(() ->
+                            Toast.makeText(this, "Gruppe beigetreten", Toast.LENGTH_SHORT).show()
+                    );
+                    break;
+
+                case "song":
+                    String title = obj.getString("title");
+                    String text = obj.getString("text");
+
+                    runOnUiThread(() ->
+                            Toast.makeText(this, "Song empfangen: " + title, Toast.LENGTH_SHORT).show()
+                    );
+                    break;
+
+                case "error":
+                    String msg = obj.getString("message");
+
+                    runOnUiThread(() ->
+                            Toast.makeText(this, msg, Toast.LENGTH_SHORT).show()
+                    );
+                    break;
+
+                case "group_status":
+                    boolean exists = obj.getBoolean("exists");
+                    if (!exists) {
+                        currentGroupId = null;
+                        prefs.edit().putString("groupId", null).apply();
+                        stopPing();
+                    } else {
+                        startPing(currentGroupId, client);
+                    }
+                    invalidateOptionsMenu();
+            }
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+
+    @Override
+    public boolean onPrepareOptionsMenu(Menu menu) {
+        MenuItem createItem = menu.findItem(R.id.create_group);
+        MenuItem qrItem = menu.findItem(R.id.show_group);
+
+        boolean hasGroup = currentGroupId != null;
+
+        if (hasGroup) {
+            createItem.setVisible(false);
+            qrItem.setVisible(true);
+        } else {
+            createItem.setVisible(true);
+            qrItem.setVisible(false);
+        }
+        return super.onPrepareOptionsMenu(menu);
+    }
+
+    private void clearLocalGroup() {
+        prefs.edit().remove("groupId").apply();
+    }
+
     //region Options Menu
     @Override
     public boolean onOptionsItemSelected(@NonNull MenuItem item) {
@@ -45,6 +264,33 @@ public class MainActivity extends AppCompatActivity {
         if (item.getItemId() == R.id.action_export) {
             exportSongs();
             return true;
+        }
+        if (item.getItemId() == R.id.create_group) {
+
+            if (client == null) {
+                connectToServer();
+                runOnUiThread(() ->
+                        Toast.makeText(MainActivity.this, "Nicht mit Server verbunden. Bitte in Kürze noch einmal versuchen.", Toast.LENGTH_SHORT).show()
+                );
+            } else {
+                if (client.isOpen()) {
+                    try {
+                        JSONObject obj = new JSONObject();
+                        obj.put("type", "create_group");
+
+                        client.send(obj.toString());
+                    } catch (Exception e) {
+                        e.printStackTrace();
+                    }
+                } else {
+                    runOnUiThread(() ->
+                            Toast.makeText(MainActivity.this, "Nicht verbunden", Toast.LENGTH_SHORT).show()
+                    );
+                }
+            }
+        }
+        if (item.getItemId() == R.id.show_group) {
+            showGroupDialog(currentGroupId);
         }
         return super.onOptionsItemSelected(item);
     }
@@ -144,10 +390,10 @@ public class MainActivity extends AppCompatActivity {
             Song s = songs.get(i);
 
             builder.append("TITLE: ")
-                    .append(s.title)
+                    .append(s.getTitle())
                     .append("\n");
 
-            builder.append(s.text)
+            builder.append(s.getText())
                     .append("\n");
 
             // Trennzeichen nur zwischen Songs
@@ -157,7 +403,7 @@ public class MainActivity extends AppCompatActivity {
         }
 
         try {
-            File file = new File(getExternalFilesDir(null), "songs.txt");
+            File file = new File(Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS), "songs.txt");
             FileWriter writer = new FileWriter(file);
 
             writer.write(builder.toString());
@@ -206,22 +452,21 @@ public class MainActivity extends AppCompatActivity {
         RecyclerView recyclerView = findViewById(R.id.recyclerView);
         recyclerView.setLayoutManager(new LinearLayoutManager(this));
 
+        prefs = getSharedPreferences("app", MODE_PRIVATE);
+
         db = DatabaseClient.getInstance(this).getAppDatabase();
         songList = db.songDao().getAllSongs();
 
 
         adapter = new SongAdapter(songList, song -> {
             Intent intent = new Intent(MainActivity.this, SongActivity.class);
-            intent.putExtra("title", song.title);
-            intent.putExtra("text", song.text);
+            intent.putExtra("song_id", song.getId());
             startActivity(intent);
         }, new SongAdapter.OnItemContextMenuClickListener() {
             @Override
             public void onContextMenuEdit(Song song) {
                 Intent intent = new Intent(MainActivity.this, EditSongActivity.class);
-                intent.putExtra("id", song.id);
-                intent.putExtra("title", song.title);
-                intent.putExtra("text", song.text);
+                intent.putExtra("id", song.getId());
                 startActivity(intent);
             }
 
@@ -229,7 +474,7 @@ public class MainActivity extends AppCompatActivity {
             public void onContextMenuDelete(Song song) {
                 new AlertDialog.Builder(MainActivity.this)
                         .setTitle("Lied löschen")
-                        .setMessage("Möchten Sie '" + song.title + "' wirklich löschen?")
+                        .setMessage("Möchten Sie '" + song.getTitle() + "' wirklich löschen?")
                         .setPositiveButton("Löschen", (dialog, which) -> {
                             db.songDao().deleteSong(song);
                             songList.remove(song);
@@ -241,6 +486,37 @@ public class MainActivity extends AppCompatActivity {
         });
 
         recyclerView.setAdapter(adapter);
+
+        currentGroupId = prefs.getString("groupId", null);
+
+        // prüfen, ob Gruppe lokal bekannt ist und ob Gruppe am Server besteht
+        if (currentGroupId != null) {
+            checkGroupOnServer(currentGroupId);
+        } else {
+            stopPing();
+            invalidateOptionsMenu();
+        }
+
+
+    }
+
+    private void checkGroupOnServer(String groupId) {
+        JSONObject msg = new JSONObject();
+        try {
+            msg.put("type", "check_group");
+            msg.put("groupId", groupId);
+
+            if (client != null && client.isOpen())
+            {
+                client.send(msg.toString());
+            } else {
+                Toast.makeText(this,"Client nicht verbunden. Könnte ein Timing-Issue sein.", Toast.LENGTH_LONG).show();
+            }
+        } catch (JSONException e) {
+            throw new RuntimeException(e);
+        }
+
+
     }
 
     @Override

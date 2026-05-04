@@ -29,6 +29,10 @@ public interface SongDao {
     @Query("DELETE FROM Song WHERE id = :id")
     void deleteById(int id);
 
+    @Query("SELECT * FROM Song WHERE id = :id")
+    Song getSongById(int id);
+
+
     @Update
     void updateSong(Song song);
 }

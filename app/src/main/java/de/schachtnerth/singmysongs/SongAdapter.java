@@ -51,7 +51,7 @@ public class SongAdapter extends RecyclerView.Adapter<SongAdapter.ViewHolder> {
         }
 
         public void bind(Song song, OnItemClickListener listener, OnItemContextMenuClickListener contextMenuClickListener) {
-            title.setText(song.title);
+            title.setText(song.getTitle());
             itemView.setOnClickListener(v -> listener.onClick(song));
             itemView.setOnLongClickListener(v -> {
                 PopupMenu popup = new PopupMenu(v.getContext(), v);

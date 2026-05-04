@@ -53,6 +53,8 @@ dependencies {
     implementation(libs.androidx.appcompat)
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.recyclerview)
+    implementation(libs.websocket)
+    implementation(libs.zxing.android.embedded)
     annotationProcessor(libs.androidx.room.compiler)
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

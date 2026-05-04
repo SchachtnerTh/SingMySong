@@ -29,8 +29,8 @@ public class AddSongActivity extends AppCompatActivity {
 
     private void saveSong() {
         Song song = new Song();
-        song.title = editTitle.getText().toString();
-        song.text = editText.getText().toString();
+        song.setTitle(editTitle.getText().toString());
+        song.setText(editText.getText().toString());
 
         db.songDao().insert(song);
 
